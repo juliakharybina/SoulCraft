@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoulCraft Łódź - Monitoring i Operations Dashboard</title>
+    <!-- Chosen Palette: Warm SoulCraft Neutrals (Kremowy, Piaskowy, Terakota, Amber) -->
+    <!-- Application Structure Plan:
+    1. Nagłówek i Identyfikacja Inicjatywy: Informacje o grancie EKS i zespole.
+    2. Nawigacja Zakładkowa (Dynamiczna):
+       - Listy Działań (Pełna edycja: obsługa dynamicznego dodawania/usuwania własnych zadań, zapisu stanu checkboxów w localStorage)
+       - Wzory Dokumentów & Tekstów (Gotowe szablony do druku i kopiowania)
+       - Notatki Zespołu (Interaktywny brudnopis auto-save + karty notatek)
+       - Harmonogram Miesięczny (Plan 12 miesięcy)
+       - Statystyki Beneficjentów (Wykresy Chart.js)
+       - Tabela Postępu XL (Interaktywny monitoring ze zmianą statusów)
+    Structure designed for maximum operational flexibility during meetings and daily project tasks.
+    -->
+    <!-- Visualization & Content Choices:
+    1. Interaktywna Checklista z localStorage (Vanilla JS): Trwałe zapamiętywanie stanu zadań oraz tworzenie własnych pozycji w dowolnej kategorii.
+    2. System Notatek (Vanilla JS + localStorage): Trwałe przechowywanie notatek zespołu.
+    3. Wykresy Chart.js (Doughnut i Bar): Utrzymane w responsywnych kontenerach.
+    NO SVG, NO Mermaid JS.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fdfbf7;
+            color: #4a3f35;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 280px;
+            max-height: 380px;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(230, 220, 210, 0.7);
+            border-radius: 1rem;
+        }
+
+        textarea:focus, input:focus, select:focus {
+            outline: 2px solid #d97706;
+            outline-offset: 1px;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-stone-800 mb-2">SoulCraft Łódź</h1>
+            <p class="text-stone-600">Panel Zarządzania Działaniami & Przygotowaniem Operacyjnym</p>
+            <div class="flex flex-wrap justify-center gap-3 mt-4">
+                <span class="bg-amber-100 text-amber-900 px-3 py-1 rounded-full text-xs font-semibold">Grant EKS: ESC30-SOL-BB4EB959-3</span>
+                <span class="bg-stone-200 text-stone-800 px-3 py-1 rounded-full text-xs font-semibold">Łódź, 2026-2027</span>
+                <span class="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs font-semibold">Projekt Bezpłatny</span>
+            </div>
+        </header>
+
+        <!-- Intro Section -->
+        <section class="glass-card p-6 mb-8 shadow-sm">
+            <h2 class="text-xl font-bold mb-2 text-stone-800">Centrum Przygotowań, Notatek i Zarządzania Działaniami</h2>
+            <p class="text-sm text-stone-600 leading-relaxed">
+                Poniższy panel integruje harmonogram, zadania operacyjne, interaktywne listy sprawdzające (z opcją dodawania własnych zadań), moduł notatek zespołowych oraz kompletne wzory dokumentów dla zespołu (Yuliia, Hubert, Valeriia, Marek, Asia).
+            </p>
+        </section>
+
+        <!-- Dynamic Nav Tabs -->
+        <div class="flex flex-wrap border-b border-stone-200 mb-8 gap-2">
+            <button onclick="switchTab('checklists')" id="tab-checklists" class="px-5 py-2.5 font-semibold text-sm border-b-2 border-amber-600 text-amber-700 transition">Listy Działań (Checklisty)</button>
+            <button onclick="switchTab('templates')" id="tab-templates" class="px-5 py-2.5 font-semibold text-sm text-stone-500 hover:text-amber-600 transition">Wzory Dokumentów & Tekstów</button>
+            <button onclick="switchTab('notes')" id="tab-notes" class="px-5 py-2.5 font-semibold text-sm text-stone-500 hover:text-amber-600 transition flex items-center gap-1.5">
+                <span>📝</span> Notatki Zespołu
+            </button>
+            <button onclick="switchTab('timeline')" id="tab-timeline" class="px-5 py-2.5 font-semibold text-sm text-stone-500 hover:text-amber-600 transition">Harmonogram Miesięczny</button>
+            <button onclick="switchTab('stats')" id="tab-stats" class="px-5 py-2.5 font-semibold text-sm text-stone-500 hover:text-amber-600 transition">Statystyki Beneficjentów</button>
+            <button onclick="switchTab('table')" id="tab-table" class="px-5 py-2.5 font-semibold text-sm text-stone-500 hover:text-amber-600 transition">Tabela Postępu (XL)</button>
+        </div>
+
+        <!-- TAB 1: LISTY DZIAŁAŃ (CHECKLISTS - EDYTUWALNE) -->
+        <div id="content-checklists" class="space-y-8">
+            <div class="glass-card p-6 shadow-sm">
+                
+                <!-- Header & Progress -->
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-2">
+                    <div>
+                        <h3 class="text-xl font-bold text-stone-800">Postęp Przygotowań Operacyjnych</h3>
+                        <p class="text-xs text-stone-500">Zaznaczaj zrealizowane punkty lub dodawaj własne zadania do checklisty.</p>
+                    </div>
+                    <div class="text-right">
+                        <span id="overall-progress-text" class="text-sm font-bold text-amber-700">0% Wykonano</span>
+                        <button onclick="resetChecklistToDefault()" class="block text-[11px] text-stone-400 hover:text-rose-600 transition mt-0.5">Przywróć domyślne zadania</button>
+                    </div>
+                </div>
+                
+                <div class="w-full bg-stone-200 rounded-full h-3 mb-6">
+                    <div id="overall-progress-bar" class="bg-amber-600 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+
+                <!-- Add Custom Task Form -->
+                <div class="bg-amber-100/70 p-4 rounded-xl border border-amber-300/80 mb-8">
+                    <h4 class="font-bold text-xs uppercase tracking-wide text-amber-900 mb-2 flex items-center gap-1.5">
+                        <span>➕</span> Dodaj Własne Zadanie / Punkt do Checklisty
+                    </h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                        <select id="new-task-category" class="sm:col-span-1 p-2 border border-amber-300 rounded text-xs bg-white text-stone-800 font-medium">
+                            <option value="logo">1. Logo i Identyfikacja</option>
+                            <option value="web">2. Strona Internetowa</option>
+                            <option value="copy">3. Teksty i Treści</option>
+                            <option value="admin">4. Dokumentacja i Formularze</option>
+                            <option value="custom">5. Moje Własne Zadania</option>
+                        </select>
+                        <input type="text" id="new-task-text" placeholder="Wpisz treść nowego zadania..." class="sm:col-span-2 p-2 border border-amber-300 rounded text-xs bg-white text-stone-800">
+                        <button onclick="addCustomTask()" class="sm:col-span-1 bg-amber-600 text-white font-semibold text-xs py-2 px-3 rounded hover:bg-amber-700 transition shadow-sm">
+                            Dodaj Zadanie
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Category Cards Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- Task Category 1: Logo & Visuals -->
+                    <div class="bg-amber-50/60 p-5 rounded-xl border border-amber-200">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-xl">🎨</span>
+                            <h4 class="font-bold text-amber-900">1. Logo i Identyfikacja Wizualna</h4>
+                        </div>
+                        <ul class="space-y-2.5 text-sm text-stone-700" id="list-logo"></ul>
+                    </div>
+
+                    <!-- Task Category 2: Website -->
+                    <div class="bg-stone-50 p-5 rounded-xl border border-stone-200">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-xl">🌐</span>
+                            <h4 class="font-bold text-stone-900">2. Strona Internetowa / Landing Page</h4>
+                        </div>
+                        <ul class="space-y-2.5 text-sm text-stone-700" id="list-web"></ul>
+                    </div>
+
+                    <!-- Task Category 3: Copywriting & Content -->
+                    <div class="bg-stone-50 p-5 rounded-xl border border-stone-200">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-xl">✍️</span>
+                            <h4 class="font-bold text-stone-900">3. Teksty i Treści Promocyjne</h4>
+                        </div>
+                        <ul class="space-y-2.5 text-sm text-stone-700" id="list-copy"></ul>
+                    </div>
+
+                    <!-- Task Category 4: Forms & Administration -->
+                    <div class="bg-amber-50/60 p-5 rounded-xl border border-amber-200">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-xl">📋</span>
+                            <h4 class="font-bold text-amber-900">4. Dokumentacja i Formularze (EKS)</h4>
+                        </div>
+                        <ul class="space-y-2.5 text-sm text-stone-700" id="list-admin"></ul>
+                    </div>
+
+                    <!-- Task Category 5: Custom User Tasks -->
+                    <div id="card-custom" class="bg-emerald-50/60 p-5 rounded-xl border border-emerald-200 md:col-span-2">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-xl">⭐</span>
+                            <h4 class="font-bold text-emerald-900">5. Moje Własne Zadania Zespołowe</h4>
+                        </div>
+                        <ul class="space-y-2.5 text-sm text-stone-700" id="list-custom"></ul>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: WZORY DOKUMENTÓW & TEKSTÓW -->
+        <div id="content-templates" class="hidden space-y-8">
+            
+            <!-- Template 1: Association Webpage Text -->
+            <div class="glass-card p-6 shadow-sm">
+                <div class="flex justify-between items-center mb-3 border-b border-stone-200 pb-3">
+                    <h3 class="text-lg font-bold text-stone-800">1. Tekst do Publikacji na Stronie Stowarzyszenia</h3>
+                    <button onclick="copyToClipboard('template-web-text')" class="text-xs bg-amber-600 text-white px-3 py-1.5 rounded hover:bg-amber-700 transition font-medium">Kopiuj Tekst</button>
+                </div>
+                <p class="text-xs text-stone-500 mb-3">Gotowy wpis aktualnościowy lub podstrona o projekcie SoulCraft Łódź.</p>
+                <div id="template-web-text" class="p-4 bg-stone-50 text-sm text-stone-800 border rounded-lg space-y-3 font-sans">
+                    <p class="font-bold text-base text-amber-900">SoulCraft Łódź – Łączymy Pokolenia przez Sztukę i Technologię</p>
+                    <p>Z radością informujemy o rozpoczęciu projektu <strong>„SoulCraft Łódź”</strong>, stworzonego przez młodzieżowy zespół inicjatywny we współpracy z naszym stowarzyszeniem. Inicjatywa ma na celu budowanie mostów międzypokoleniowych pomiędzy łódzkimi seniorami (60+) a młodzieżą (15-26 lat).</p>
+                    <p>W ramach projektu zorganizowane zostaną bezpłatne cykle warsztatowe, w tym:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong>Arteterapia „Pędzlem po Stresie”</strong> – warsztaty redukcji napięcia i wyrażania emocji poprzez sztukę.</li>
+                        <li><strong>„Cyfrowa Herbaciarnia” & Fotospacery</strong> – młodzież jako cyfrowi mentorzy uczy seniorów fotografii mobilnej na łódzkich ulicach (Piotrkowska, Księży Młyn, Park Źródliska).</li>
+                        <li><strong>Rękodzieło „Łódzkie Sploty” i Joga</strong> – międzypokoleniowa wymiana doświadczeń i dbałość o dobrostan.</li>
+                        <li><strong>Kącik Dialogu & Wernisaż Finałowy</strong> – trwała przestrzeń rozmów oraz uroczysta wystawa prac w łódzkich instytucjach kultury.</li>
+                    </ul>
+                    <p><strong>Dla kogo:</strong> Młodzież w wieku 15–26 lat oraz Seniorzy 60+ z Łodzi. Wszystkie zajęcia są całkowicie bezpłatne!</p>
+                    <p class="text-xs text-stone-500 italic border-t pt-2 mt-4">Projekt „SoulCraft Łódź” jest finansowany ze środków Unii Europejskiej w ramach Europejskiego Korpusu Solidarności (Numer projektu: ESC30-SOL-BB4EB959-3). Sfinansowane ze środków UE. Wyrażone poglądy i opinie są jedynie opiniami autora lub autorów i niekoniecznie odzwierciedlają poglądy Unii Europejskiej. Unia Europejska ani organ udzielający dotacji nie ponoszą za nie odpowiedzialności.</p>
+                </div>
+            </div>
+
+            <!-- Template 2: Printable Attendance List -->
+            <div class="glass-card p-6 shadow-sm">
+                <div class="flex justify-between items-center mb-3 border-b border-stone-200 pb-3">
+                    <h3 class="text-lg font-bold text-stone-800">2. Wzór Papierowej Listy Obecności (Do Druku)</h3>
+                    <button onclick="window.print()" class="text-xs bg-stone-700 text-white px-3 py-1.5 rounded hover:bg-stone-800 transition font-medium">Drukuj / Zapisz PDF</button>
+                </div>
+                <div class="p-4 bg-white border border-stone-300 rounded-lg text-xs space-y-4">
+                    <div class="text-center border-b pb-2">
+                        <h4 class="font-bold text-sm uppercase">LISTA OBECNOŚCI – PROJEKT SOULCRAFT ŁÓDŹ</h4>
+                        <p>Projekt nr ESC30-SOL-BB4EB959-3 | Europejski Korpus Solidarności</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <p><strong>Nazwa Warsztatu/Wydarzenia:</strong> .....................................................</p>
+                        <p><strong>Data i Miejsce:</strong> .....................................................</p>
+                        <p><strong>Prowadzący:</strong> .....................................................</p>
+                        <p><strong>Czas trwania:</strong> ....... godz.</p>
+                    </div>
+                    <table class="w-full border-collapse border border-stone-400 mt-4 text-left">
+                        <thead>
+                            <tr class="bg-stone-100">
+                                <th class="border border-stone-400 p-2 w-8">Lp.</th>
+                                <th class="border border-stone-400 p-2">Imię i Nazwisko</th>
+                                <th class="border border-stone-400 p-2 w-20">Wiek</th>
+                                <th class="border border-stone-400 p-2 w-36">Młodzież / Senior</th>
+                                <th class="border border-stone-400 p-2 w-32">Podpis Uczestnika</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td class="border border-stone-400 p-2">1</td><td class="border border-stone-400 p-2"></td><td class="border border-stone-400 p-2"></td><td class="border border-stone-400 p-2">Młody [ ] / Senior [ ]</td><td class="border border-stone-400 p-2"></td></tr>
+                            <tr><td class="border border-stone-400 p-2">2</td><td class="border border-stone-400 p-2"></td><td class="border border-stone-400 p-2"></td><td class="border border-stone-400 p-2">Młody [ ] / Senior [ ]</td><td class="border border-stone-400 p-2"></td></tr>
+                            <tr><td class="border border-stone-400 p-2">3</td><td class="border border-stone-400 p-2"></td><td class="border border-stone-400 p-2"></td><td class="border border-stone-400 p-2">Młody [ ] / Senior [ ]</td><td class="border border-stone-400 p-2"></td></tr>
+                            <tr><td class="border border-stone-400 p-2">4</td><td class="border border-stone-400 p-2"></td><td class="border border-stone-400 p-2"></td><td class="border border-stone-400 p-2">Młody [ ] / Senior [ ]</td><td class="border border-stone-400 p-2"></td></tr>
+                            <tr><td class="border border-stone-400 p-2">5</td><td class="border border-stone-400 p-2"></td><td class="border border-stone-400 p-2"></td><td class="border border-stone-400 p-2">Młody [ ] / Senior [ ]</td><td class="border border-stone-400 p-2"></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Template 3: RODO & Image Consent -->
+            <div class="glass-card p-6 shadow-sm">
+                <div class="flex justify-between items-center mb-3 border-b border-stone-200 pb-3">
+                    <h3 class="text-lg font-bold text-stone-800">3. Formularz RODO i Zgoda na Wykorzystanie Wizerunku</h3>
+                    <button onclick="copyToClipboard('template-rodo-text')" class="text-xs bg-amber-600 text-white px-3 py-1.5 rounded hover:bg-amber-700 transition font-medium">Kopiuj Wzór</button>
+                </div>
+                <div id="template-rodo-text" class="p-4 bg-stone-50 text-xs text-stone-800 border rounded-lg space-y-2 font-sans">
+                    <p class="font-bold text-stone-900">OŚWIADCZENIE UCZESTNIKA PROJEKTU „SOULCRAFT ŁÓDŹ”</p>
+                    <p>Ja, niżej podpisany/a, wyrażam zgodę na przetwarzanie moich danych osobowych (imię, nazwisko, wiek, numer telefonu, adres e-mail) przez Zespół Inicjatywny Projektu SoulCraft Łódź oraz Stowarzyszenie Wspierające na potrzeby organizacji i realizacji działań w ramach projektu ESC30-SOL-BB4EB959-3 wspieranego przez Europejski Korpus Solidarności.</p>
+                    <p class="font-bold mt-2">ZGODA NA WYKORZYSTANIE WIZERUNKU:</p>
+                    <p>Wyrażam nieodpłatną i bezterminową zgodę na utrwalanie, wykorzystanie i rozpowszechnianie mojego wizerunku w postaci zdjęć i nagrań wideo wykonanych podczas warsztatów, fotospacerów i wernisażu. Zdjęcia mogą być publikowane na stronie internetowej, profilach w mediach społecznościowych (Facebook, Instagram) oraz w materiałach sprawozdawczych dla Narodowej Agencji Europejskiego Korpusu Solidarności.</p>
+                    <div class="pt-4 grid grid-cols-2 gap-4">
+                        <p>Data: .......................................</p>
+                        <p>Podpis: .......................................</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- TAB 3: NOTATKI ZESPOŁU -->
+        <div id="content-notes" class="hidden space-y-8">
+            
+            <!-- Quick Scratchpad (Auto-saves in LocalStorage) -->
+            <div class="glass-card p-6 shadow-sm bg-amber-50/40 border-amber-200">
+                <div class="flex justify-between items-center mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">✍️</span>
+                        <h3 class="text-lg font-bold text-stone-800">Szybki Brudnopis Zespołu (Auto-zapis)</h3>
+                    </div>
+                    <span id="scratchpad-status" class="text-xs text-amber-800 font-semibold bg-amber-100 px-2.5 py-1 rounded-full">Automatycznie zapisano</span>
+                </div>
+                <p class="text-xs text-stone-600 mb-3">
+                    Wpisuj tu szybkie pomysły, luźne myśli, adresy, kontakty lub notatki ze spotkań. Treść zapisuje się automatycznie w Twojej przeglądarce.
+                </p>
+                <textarea id="quick-scratchpad" oninput="saveScratchpad()" rows="4" class="w-full p-3 border border-amber-300 rounded-lg text-sm bg-white text-stone-800 focus:ring-2 focus:ring-amber-500" placeholder="Wpisz podręczne ustalenia, np. Telefon do sali w MeMo: 123-456-789, kupić brystol i sztalugi na miesiąc 2..."></textarea>
+            </div>
+
+            <!-- Structured Notes System -->
+            <div class="glass-card p-6 shadow-sm">
+                <h3 class="text-xl font-bold text-stone-800 mb-2">Baza Notatek i Ustaleń ze Spotkań</h3>
+                <p class="text-xs text-stone-600 mb-6">Dodawaj ustrukturyzowane notatki przypisane do osób, spotkań lub kategorii, aby nikt w zespole nie przeoczył ustaleń.</p>
+
+                <!-- Form: Add Note -->
+                <div class="bg-stone-50 p-4 rounded-xl border border-stone-200 mb-8">
+                    <h4 class="font-bold text-sm text-stone-800 mb-3 flex items-center gap-2">
+                        <span>➕</span> Dodaj Nową Notatkę
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-stone-600 mb-1">Tytuł / Temat</label>
+                            <input type="text" id="note-title" class="w-full p-2 border rounded text-xs bg-white" placeholder="np. Potwierdzenie sali w MSK">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-stone-600 mb-1">Autor Notatki</label>
+                            <select id="note-author" class="w-full p-2 border rounded text-xs bg-white">
+                                <option value="Zespół">Cały Zespół</option>
+                                <option value="Yuliia">Yuliia</option>
+                                <option value="Hubert">Hubert</option>
+                                <option value="Valeriia">Valeriia</option>
+                                <option value="Marek">Marek</option>
+                                <option value="Asia">Asia</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-stone-600 mb-1">Kategoria / Tagi</label>
+                            <select id="note-category" class="w-full p-2 border rounded text-xs bg-white">
+                                <option value="Spotkanie">👥 Spotkanie zespołu</option>
+                                <option value="Coaching">🧠 Coaching EKS</option>
+                                <option value="Rekrutacja">📣 Rekrutacja & Promo</option>
+                                <option value="Logistyka">🏛️ Logistyka & Sale</option>
+                                <option value="Pilne">🔥 Ważne / Pilne</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs font-semibold text-stone-600 mb-1">Treść notatki / Ustalenia</label>
+                        <textarea id="note-content" rows="3" class="w-full p-2 border rounded text-xs bg-white" placeholder="Wpisz szczegóły ustaleń, podział zadań, daty..."></textarea>
+                    </div>
+                    <button onclick="addStructuredNote()" class="bg-amber-600 text-white font-semibold text-xs px-4 py-2 rounded-lg hover:bg-amber-700 transition">
+                        Zapisz Notatkę
+                    </button>
+                </div>
+
+                <!-- Filters & Search -->
+                <div class="flex flex-wrap justify-between items-center mb-4 gap-2 border-b pb-4">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-xs font-semibold text-stone-500">Filtruj wg kategorii:</span>
+                        <button onclick="filterNotes('all')" class="text-xs bg-stone-200 px-2.5 py-1 rounded font-medium">Wszystkie</button>
+                        <button onclick="filterNotes('Spotkanie')" class="text-xs bg-amber-100 text-amber-800 px-2.5 py-1 rounded font-medium">👥 Spotkanie</button>
+                        <button onclick="filterNotes('Coaching')" class="text-xs bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded font-medium">🧠 Coaching</button>
+                        <button onclick="filterNotes('Rekrutacja')" class="text-xs bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded font-medium">📣 Rekrutacja</button>
+                        <button onclick="filterNotes('Logistyka')" class="text-xs bg-blue-100 text-blue-800 px-2.5 py-1 rounded font-medium">🏛️ Logistyka</button>
+                        <button onclick="filterNotes('Pilne')" class="text-xs bg-rose-100 text-rose-800 px-2.5 py-1 rounded font-medium">🔥 Pilne</button>
+                    </div>
+                    <button onclick="clearAllNotes()" class="text-xs text-stone-400 hover:text-rose-600 transition">Usuń wszystkie notatki</button>
+                </div>
+
+                <!-- Notes Cards Grid -->
+                <div id="notes-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Rendered dynamically by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: HARMONOGRAM MIESIĘCZNY -->
+        <div id="content-timeline" class="hidden space-y-6">
+            <div class="glass-card p-6 shadow-sm">
+                <h3 class="text-xl font-bold mb-2">Interaktywny Harmonogram Działań (12 Miesięcy)</h3>
+                <p class="text-sm text-stone-600 mb-6">Przeglądaj zadania krok po kroku z podziałem na fazę stałą, koncepcyjną i otwartą.</p>
+                <div id="timeline-container" class="space-y-4">
+                    <!-- Loaded by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: STATYSTYKI I LUDZIE -->
+        <div id="content-stats" class="hidden space-y-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="glass-card p-6 shadow-sm">
+                    <h3 class="text-base font-bold mb-4 text-center">Struktura Beneficjentów (50/50)</h3>
+                    <div class="chart-container">
+                        <canvas id="ageChart"></canvas>
+                    </div>
+                    <p class="text-xs text-stone-500 mt-4 text-center">30 Młodych (15-26 lat) oraz 30 Seniorów (60+ lat).</p>
+                </div>
+                <div class="glass-card p-6 shadow-sm">
+                    <h3 class="text-base font-bold mb-4 text-center">Planowana Frekwencja w Miesiącach</h3>
+                    <div class="chart-container">
+                        <canvas id="attendanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 6: TABELA POSTĘPU (XL) -->
+        <div id="content-table" class="hidden">
+            <div class="glass-card p-6 shadow-sm overflow-x-auto">
+                <div class="flex flex-wrap justify-between items-center mb-6 gap-2">
+                    <h3 class="text-xl font-bold">Monitor Postępu Projektu</h3>
+                    <div class="flex gap-2">
+                        <button onclick="filterTable('all')" class="text-xs bg-stone-200 px-3 py-1.5 rounded font-medium">Wszystkie</button>
+                        <button onclick="filterTable('todo')" class="text-xs bg-gray-100 px-3 py-1.5 rounded font-medium">Do zrobienia</button>
+                        <button onclick="filterTable('progress')" class="text-xs bg-amber-100 text-amber-800 px-3 py-1.5 rounded font-medium">W trakcie</button>
+                        <button onclick="filterTable('done')" class="text-xs bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded font-medium">Gotowe</button>
+                    </div>
+                </div>
+                <table class="w-full text-left border-collapse min-w-[600px]">
+                    <thead>
+                        <tr class="bg-stone-100 text-stone-600 uppercase text-xs">
+                            <th class="p-3 border-b">Miesiąc</th>
+                            <th class="p-3 border-b">Zadanie Kluczowe</th>
+                            <th class="p-3 border-b text-center">Uczestnicy</th>
+                            <th class="p-3 border-b">Wiek</th>
+                            <th class="p-3 border-b">Status Realizacji</th>
+                        </tr>
+                    </thead>
+                    <tbody id="project-table-body">
+                        <!-- Loaded by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-12 text-center text-stone-500 text-xs pb-10">
+            <p>&copy; 2026 SoulCraft Łódź - Zespół Inicjatywny: Yuliia, Hubert, Valeriia, Marek, Asia</p>
+            <p class="mt-1">Inicjatywa Młodzieżowa finansowana ze środków Unii Europejskiej w ramach Europejskiego Korpusu Solidarności</p>
+        </footer>
+    </div>
+
+    <script>
+        // --- CHECKLIST DATA INITIALIZATION & DYNAMIC MANAGEMENT ---
+        const defaultChecklists = [
+            // Logo
+            { id: "c_l1", category: "logo", text: "<strong>Brief projektowy:</strong> Określenie palety barw (barwy ciepłe, motyw Łodzi, sztuki i dialogu).", checked: false, isCustom: false },
+            { id: "c_l2", category: "logo", text: "<strong>Projekt Logo:</strong> Wersja podstawowa, sygnet i wersja z podpisem \"SoulCraft Łódź\".", checked: false, isCustom: false },
+            { id: "c_l3", category: "logo", text: "<strong>Eksport plików:</strong> PNG z przezroczystym tłem, JPG oraz PDF do druku.", checked: false, isCustom: false },
+            { id: "c_l4", category: "logo", text: "<strong>Obowiązkowy pasek logotypów UE:</strong> Połączenie logo EKS z pakiem informacyjnym o finansowaniu.", checked: false, isCustom: false },
+            { id: "c_l5", category: "logo", text: "<strong>Szablony graficzne w Canvie:</strong> Szablon posta na Instagram/FB i plakatu A3.", checked: false, isCustom: false },
+
+            // Web
+            { id: "c_w1", category: "web", text: "<strong>Makieta treści (UX):</strong> Przygotowanie prostej nawigacji i dużej czcionki dla seniorów (60+).", checked: false, isCustom: false },
+            { id: "c_w2", category: "web", text: "<strong>Sekcja Hero & O Projekcie:</strong> Opis integracji międzypokoleniowej przez arteterapię i fotografię.", checked: false, isCustom: false },
+            { id: "c_w3", category: "web", text: "<strong>Interaktywny Harmonogram:</strong> Kalendarz warsztatów, fotospacerów i plenerów.", checked: false, isCustom: false },
+            { id: "c_w4", category: "web", text: "<strong>Formularz Rejestracji Online:</strong> Osadzenie formularza zapisów (Google Forms).", checked: false, isCustom: false },
+            { id: "c_w5", category: "web", text: "<strong>Dostępność (WCAG) & Mobile:</strong> Przetestowanie widoczności na smartfonach i kontrastów.", checked: false, isCustom: false },
+
+            // Copywriting
+            { id: "c_c1", category: "copy", text: "<strong>Notka oficjalna na stronę Stowarzyszenia:</strong> Zwięzły wpis z celami, grupą docelową i finansowaniem.", checked: false, isCustom: false },
+            { id: "c_c2", category: "copy", text: "<strong>Ogłoszenie rekrutacyjne:</strong> Osobny komunikat dla seniorów (telefon) i dla młodzieży (social media).", checked: false, isCustom: false },
+            { id: "c_c3", category: "copy", text: "<strong>Informacja prasowa (PR):</strong> Notatka dla lokalnych portali (TuŁódź, Radio Łódź, UMŁ).", checked: false, isCustom: false },
+            { id: "c_c4", category: "copy", text: "<strong>Wymagana Klauzula Unijna:</strong> Dopisanie zastrzeżenia prawnego KE pod każdym tekstem.", checked: false, isCustom: false },
+
+            // Admin
+            { id: "c_a1", category: "admin", text: "<strong>Papierowa Lista Obecności:</strong> Szablon na każde warsztaty (Imię, Nazwisko, Wiek, Podpis).", checked: false, isCustom: false },
+            { id: "c_a2", category: "admin", text: "<strong>Klauzula RODO & Zgoda na Wizerunek:</strong> Oświadczenie przetwarzania danych i publikacji zdjęć.", checked: false, isCustom: false },
+            { id: "c_a3", category: "admin", text: "<strong>Zgoda Rodzica / Opiekuna:</strong> Dedykowany formularz dla osób niepełnoletnich (15-17 lat).", checked: false, isCustom: false },
+            { id: "c_a4", category: "admin", text: "<strong>Kwestionariusz Pre-Test i Post-Test:</strong> Ankiety badania samopoczucia i relacji.", checked: false, isCustom: false },
+            { id: "c_a5", category: "admin", text: "<strong>Dziennik Spotkań z Coachem:</strong> Karty monitorowania pracy zespołu z coachem EKS.", checked: false, isCustom: false }
+        ];
+
+        let currentChecklist = [];
+
+        function loadChecklist() {
+            const saved = localStorage.getItem('soulcraft_checklist_data');
+            if (saved) {
+                try {
+                    currentChecklist = JSON.parse(saved);
+                } catch(e) {
+                    currentChecklist = [...defaultChecklists];
+                }
+            } else {
+                currentChecklist = [...defaultChecklists];
+            }
+            renderChecklists();
+        }
+
+        function saveChecklist() {
+            localStorage.setItem('soulcraft_checklist_data', JSON.stringify(currentChecklist));
+            updateProgress();
+        }
+
+        function renderChecklists() {
+            const categories = ['logo', 'web', 'copy', 'admin', 'custom'];
+            categories.forEach(cat => {
+                const el = document.getElementById('list-' + cat);
+                if (el) el.innerHTML = '';
+            });
+
+            currentChecklist.forEach(item => {
+                const listEl = document.getElementById('list-' + item.category) || document.getElementById('list-custom');
+                if (listEl) {
+                    const li = document.createElement('li');
+                    li.className = "flex items-start justify-between gap-2 border-b border-stone-100 pb-1.5 last:border-b-0";
+                    li.innerHTML = `
+                        <label class="flex items-start gap-2 cursor-pointer flex-1 select-none">
+                            <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleTask('${item.id}')" class="mt-1 rounded text-amber-600 focus:ring-amber-500">
+                            <span class="${item.checked ? 'line-through text-stone-400' : 'text-stone-700'}">${item.text}</span>
+                        </label>
+                        ${item.isCustom ? `<button onclick="deleteTask('${item.id}')" class="text-xs text-stone-300 hover:text-rose-600 transition px-1">✕</button>` : ''}
+                    `;
+                    listEl.appendChild(li);
+                }
+            });
+
+            // Show/Hide custom category block depending on if custom items exist or not
+            const customCard = document.getElementById('card-custom');
+            const hasCustom = currentChecklist.some(i => i.category === 'custom');
+            if (customCard) {
+                if (hasCustom) {
+                    customCard.classList.remove('hidden');
+                } else {
+                    customCard.classList.add('hidden');
+                }
+            }
+
+            updateProgress();
+        }
+
+        function toggleTask(id) {
+            const item = currentChecklist.find(i => i.id === id);
+            if (item) {
+                item.checked = !item.checked;
+                saveChecklist();
+                renderChecklists();
+            }
+        }
+
+        function addCustomTask() {
+            const textInput = document.getElementById('new-task-text');
+            const catInput = document.getElementById('new-task-category');
+            const text = textInput.value.trim();
+            const category = catInput.value;
+
+            if (!text) {
+                alert('Proszę wpisać treść zadania.');
+                return;
+            }
+
+            const newTask = {
+                id: 'task_' + Date.now(),
+                category: category,
+                text: text,
+                checked: false,
+                isCustom: true
+            };
+
+            currentChecklist.push(newTask);
+            saveChecklist();
+            renderChecklists();
+            textInput.value = '';
+        }
+
+        function deleteTask(id) {
+            if (confirm('Czy na pewno chcesz usunąć to zadanie z listy?')) {
+                currentChecklist = currentChecklist.filter(i => i.id !== id);
+                saveChecklist();
+                renderChecklists();
+            }
+        }
+
+        function resetChecklistToDefault() {
+            if (confirm('Czy na pewno chcesz zresetować całą checklistę do stanu początkowego? Usunie to Twoje własne dopisane punkty.')) {
+                currentChecklist = JSON.parse(JSON.stringify(defaultChecklists));
+                saveChecklist();
+                renderChecklists();
+            }
+        }
+
+        function updateProgress() {
+            const total = currentChecklist.length;
+            if (total === 0) {
+                document.getElementById('overall-progress-bar').style.width = '0%';
+                document.getElementById('overall-progress-text').innerText = '0% Wykonano';
+                return;
+            }
+            const checked = currentChecklist.filter(i => i.checked).length;
+            const pct = Math.round((checked / total) * 100);
+            
+            document.getElementById('overall-progress-bar').style.width = pct + '%';
+            document.getElementById('overall-progress-text').innerText = pct + '% Wykonano (' + checked + '/' + total + ')';
+        }
+
+        // --- PROJECT TIMELINE & MONITOR TABLE DATA ---
+        const projectData = [
+            { m: 1, task: "Przygotowania logistyczne, rekrutacja, ankiety pre-test", people: 20, age: "15-26 & 60+", status: "todo", desc: "Zabezpieczenie sal, rekrutacja grupy stałej 20 os., spotkanie z coachem." },
+            { m: 2, task: "Warsztaty arteterapeutyczne „Pędzlem po Stresie”", people: 20, age: "15-26 & 60+", status: "todo", desc: "Dwie tury po 10 osób. Praca z emocjami, integracja międzypokoleniowa." },
+            { m: 3, task: "„Cyfrowa Herbaciarnia” - fotografia mobilna", people: "15-20", age: "15-26 & 60+", status: "todo", desc: "Młodzież jako cyfrowi mentorzy. Nauka smartfona przy herbacie." },
+            { m: 4, task: "Fotospacer I – „Ukryte perły Piotrkowskiej”", people: 20, age: "15-26 & 60+", status: "todo", desc: "Odkrywanie podwórek i detali architektonicznych Łodzi." },
+            { m: 5, task: "Analiza ankiet, koncepcja „Kącika Dialogu”", people: "Zespół+Coach", age: "18-30", status: "todo", desc: "Opracowanie zestawu kart konwersacyjnych i instrukcji." },
+            { m: 6, task: "Wdrażanie „Kącika Dialogu” w instytucjach", people: "Zespół+Dyrekcje", age: "Dorośli", status: "todo", desc: "Partnerstwa z bibliotekami i domami kultury (MeMo, MSK)." },
+            { m: 7, task: "Warsztaty „Ruch i Ciało” (joga) - Faza Otwarta", people: "10-15", age: "15-26 & 60+", status: "todo", desc: "Techniki oddechowe i relaksacyjne dla chętnych." },
+            { m: 8, task: "Fotospacer II – Industrialna Łódź (Księży Młyn)", people: 20, age: "15-26 & 60+", status: "todo", desc: "Historia włókiennicza Łodzi oczami dwóch pokoleń." },
+            { m: 9, task: "Warsztaty „Łódzkie Sploty” (upcykling)", people: "15-20", age: "15-26 & 60+", status: "todo", desc: "Praca z tkaninami, makramy, nawiązanie do tradycji tekstylnych." },
+            { m: 10, task: "Fotospacer III – Park Źródliska / Stary Cmentarz", people: 20, age: "15-26 & 60+", status: "todo", desc: "Fotografia plenerowa oraz selekcja prac do wernisażu." },
+            { m: 11, task: "Wielki Wernisaż i wystawa finałowa (MeMo/MSK)", people: "30-60", age: "Wszyscy", status: "todo", desc: "Uroczysta prezentacja prac, ewaluacja końcowa post-test." },
+            { m: 12, task: "Zamknięcie, raport końcowy, Youthpass", people: "Zespół", age: "18-30", status: "todo", desc: "Rozliczenie budżetu 9204€, certyfikacja Youthpass." }
+        ];
+
+        // Default Notes
+        const defaultNotes = [
+            { id: 1, title: "Spotkanie z Coachem EKS", author: "Yuliia", category: "Coaching", date: "2026-08-15", content: "W M1 ustalamy 2 terminy na sesje coachingowe ws. facylitacji konfliktów pokoleniowych i prowadzenia warsztatów." },
+            { id: 2, title: "Rezerwacja przestrzeni MeMo", author: "Hubert", category: "Logistyka", date: "2026-08-16", content: "Złożyliśmy zapytanie o dostępność sali warsztatowej na fotospacer I oraz wernisaż w M11. Oczekujemy na odpowiedź dyrekcji." },
+            { id: 3, title: "Promocja wśród seniorów", author: "Valeriia", category: "Rekrutacja", date: "2026-08-17", content: "Drukowane ulotki najlepiej przekazać do lokalnych Uniwersytetów Trzeciego Wieku oraz Domów Dziennego Pobytu w Łodzi." }
+        ];
+
+        let structuredNotes = [];
+
+        function switchTab(tab) {
+            document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id^="tab-"]').forEach(el => {
+                el.classList.remove('border-b-2', 'border-amber-600', 'text-amber-700');
+                el.classList.add('text-stone-500');
+            });
+
+            document.getElementById('content-' + tab).classList.remove('hidden');
+            document.getElementById('tab-' + tab).classList.add('border-b-2', 'border-amber-600', 'text-amber-700');
+            document.getElementById('tab-' + tab).classList.remove('text-stone-500');
+        }
+
+        function copyToClipboard(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Skopiowano treść do schowka!');
+            });
+        }
+
+        // --- SCRATCHPAD & NOTES LOGIC ---
+        function loadScratchpad() {
+            const savedText = localStorage.getItem('soulcraft_quick_scratchpad');
+            if (savedText !== null) {
+                document.getElementById('quick-scratchpad').value = savedText;
+            }
+        }
+
+        function saveScratchpad() {
+            const text = document.getElementById('quick-scratchpad').value;
+            localStorage.setItem('soulcraft_quick_scratchpad', text);
+            
+            const statusEl = document.getElementById('scratchpad-status');
+            statusEl.innerText = "Zapisywanie...";
+            setTimeout(() => {
+                statusEl.innerText = "Automatycznie zapisano";
+            }, 600);
+        }
+
+        function loadStructuredNotes() {
+            const savedNotes = localStorage.getItem('soulcraft_structured_notes');
+            if (savedNotes) {
+                try {
+                    structuredNotes = JSON.parse(savedNotes);
+                } catch(e) {
+                    structuredNotes = defaultNotes;
+                }
+            } else {
+                structuredNotes = defaultNotes;
+            }
+            renderNotesGrid(structuredNotes);
+        }
+
+        function saveStructuredNotes() {
+            localStorage.setItem('soulcraft_structured_notes', JSON.stringify(structuredNotes));
+        }
+
+        function addStructuredNote() {
+            const title = document.getElementById('note-title').value.trim();
+            const author = document.getElementById('note-author').value;
+            const category = document.getElementById('note-category').value;
+            const content = document.getElementById('note-content').value.trim();
+
+            if (!title || !content) {
+                alert('Proszę podać tytuł oraz treść notatki.');
+                return;
+            }
+
+            const newNote = {
+                id: Date.now(),
+                title: title,
+                author: author,
+                category: category,
+                date: new Date().toISOString().split('T')[0],
+                content: content
+            };
+
+            structuredNotes.unshift(newNote);
+            saveStructuredNotes();
+            renderNotesGrid(structuredNotes);
+
+            document.getElementById('note-title').value = '';
+            document.getElementById('note-content').value = '';
+        }
+
+        function deleteNote(id) {
+            if (confirm('Czy na pewno chcesz usunąć tę notatkę?')) {
+                structuredNotes = structuredNotes.filter(n => n.id !== id);
+                saveStructuredNotes();
+                renderNotesGrid(structuredNotes);
+            }
+        }
+
+        function clearAllNotes() {
+            if (confirm('Czy na pewno chcesz usunąć wszystkie notatki?')) {
+                structuredNotes = [];
+                saveStructuredNotes();
+                renderNotesGrid([]);
+            }
+        }
+
+        function filterNotes(cat) {
+            if (cat === 'all') {
+                renderNotesGrid(structuredNotes);
+            } else {
+                const filtered = structuredNotes.filter(n => n.category === cat);
+                renderNotesGrid(filtered);
+            }
+        }
+
+        function renderNotesGrid(notesList) {
+            const grid = document.getElementById('notes-grid');
+            if (notesList.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-8 text-stone-400 text-sm">Brak notatek w tej kategorii. Dodaj pierwszą wyżej!</div>`;
+                return;
+            }
+
+            const categoryStyles = {
+                'Spotkanie': 'bg-amber-100 text-amber-800',
+                'Coaching': 'bg-indigo-100 text-indigo-800',
+                'Rekrutacja': 'bg-emerald-100 text-emerald-800',
+                'Logistyka': 'bg-blue-100 text-blue-800',
+                'Pilne': 'bg-rose-100 text-rose-800'
+            };
+
+            grid.innerHTML = notesList.map(note => `
+                <div class="bg-white p-4 rounded-xl border border-stone-200 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-start gap-2 mb-2">
+                            <span class="text-xs px-2 py-0.5 rounded font-semibold ${categoryStyles[note.category] || 'bg-stone-100 text-stone-700'}">
+                                ${note.category}
+                            </span>
+                            <span class="text-xs text-stone-400">${note.date}</span>
+                        </div>
+                        <h4 class="font-bold text-stone-800 text-sm mb-1">${note.title}</h4>
+                        <p class="text-xs text-stone-600 leading-relaxed whitespace-pre-line mb-3">${note.content}</p>
+                    </div>
+                    <div class="flex justify-between items-center border-t border-stone-100 pt-2 text-xs">
+                        <span class="font-medium text-stone-500">Autor: <strong class="text-stone-800">${note.author}</strong></span>
+                        <button onclick="deleteNote(${note.id})" class="text-stone-400 hover:text-rose-600 transition">Usuń</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- RENDER TIMELINE & MONITOR TABLE ---
+        function renderTimeline() {
+            const container = document.getElementById('timeline-container');
+            container.innerHTML = projectData.map(item => `
+                <div class="p-4 border-l-4 ${item.m <= 4 ? 'border-amber-500' : (item.m <= 6 ? 'border-stone-400' : 'border-emerald-500')} bg-white shadow-sm rounded-r-lg">
+                    <div class="flex flex-wrap justify-between items-start gap-2">
+                        <div>
+                            <span class="text-xs font-bold text-amber-700 uppercase">Miesiąc ${item.m}</span>
+                            <h4 class="font-bold text-stone-800 text-sm md:text-base">${item.task}</h4>
+                            <p class="text-xs text-stone-600 mt-1">${item.desc}</p>
+                        </div>
+                        <div class="text-right text-xs text-stone-500">
+                            <span class="block font-medium">Uczestnicy: ${item.people}</span>
+                            <span class="block font-medium">Wiek: ${item.age}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderTable(filter = 'all') {
+            const tbody = document.getElementById('project-table-body');
+            const filtered = filter === 'all' ? projectData : projectData.filter(i => i.status === filter);
+            
+            tbody.innerHTML = filtered.map(item => `
+                <tr class="hover:bg-stone-50 transition-colors border-b border-stone-100 text-sm">
+                    <td class="p-3 font-semibold text-stone-500">M ${item.m}</td>
+                    <td class="p-3">
+                        <div class="font-medium text-stone-800">${item.task}</div>
+                        <div class="text-xs text-stone-500">${item.desc.substring(0, 45)}...</div>
+                    </td>
+                    <td class="p-3 text-center font-bold text-amber-800">${item.people}</td>
+                    <td class="p-3 text-xs">${item.age}</td>
+                    <td class="p-3">
+                        <select onchange="updateStatus(${item.m}, this.value)" class="text-xs border rounded p-1 font-bold uppercase cursor-pointer bg-white">
+                            <option value="todo" ${item.status === 'todo' ? 'selected' : ''}>Do zrobienia</option>
+                            <option value="progress" ${item.status === 'progress' ? 'selected' : ''}>W trakcie</option>
+                            <option value="done" ${item.status === 'done' ? 'selected' : ''}>Gotowe</option>
+                        </select>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateStatus(month, newStatus) {
+            const index = projectData.findIndex(i => i.m === month);
+            projectData[index].status = newStatus;
+        }
+
+        function filterTable(status) {
+            renderTable(status);
+        }
+
+        function initCharts() {
+            new Chart(document.getElementById('ageChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Młodzież (15-26 lat)', 'Seniorzy (60+ lat)'],
+                    datasets: [{
+                        data: [30, 30],
+                        backgroundColor: ['#d97706', '#78716c'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+                    }
+                }
+            });
+
+            new Chart(document.getElementById('attendanceChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['M1', 'M2', 'M3', 'M4', 'M7', 'M8', 'M9', 'M10', 'M11'],
+                    datasets: [{
+                        label: 'Liczba osób na wydarzeniu',
+                        data: [20, 20, 18, 20, 15, 20, 20, 20, 50],
+                        backgroundColor: '#f59e0b',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, grid: { display: false } },
+                        x: { grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        window.onload = () => {
+            loadChecklist();
+            renderTimeline();
+            renderTable();
+            initCharts();
+            loadScratchpad();
+            loadStructuredNotes();
+        };
+    </script>
+</body>
+</html>
